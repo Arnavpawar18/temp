@@ -1,0 +1,35 @@
+INSTRUCTIONS TO UPDATE IPs:
+
+1. Open ESP1 Serial Monitor (ESP8266 NodeMCU)
+   - Note the IP shown (e.g., "IP: 192.168.1.100")
+   - This is ESP1_IP
+
+2. Open ESP2 Serial Monitor (ZY-ESP32)
+   - Note the IP shown (e.g., "WiFi connected: 192.168.1.101")
+   - This is ESP2_IP
+
+3. Open main.py in editor
+
+4. Find these lines (around line 15-17):
+   ESP32_CAM_IP = '10.204.171.40'
+   ESP8266_ENTRY_IP = 'ESP1_IP_HERE'
+   ESP8266_DISPLAY_IP = 'ESP2_IP_HERE'
+
+5. Replace with actual IPs:
+   ESP32_CAM_IP = '10.204.171.40'
+   ESP8266_ENTRY_IP = '192.168.1.100'  # <-- Your ESP1 IP here
+   ESP8266_DISPLAY_IP = '192.168.1.101'  # <-- Your ESP2 IP here
+
+6. Save main.py
+
+7. Restart Flask server:
+   - Press Ctrl+C to stop
+   - Run: python main.py
+
+EXAMPLE:
+If ESP1 shows: "IP: 10.204.171.50"
+If ESP2 shows: "WiFi connected: 10.204.171.51"
+
+Then update to:
+ESP8266_ENTRY_IP = '10.204.171.50'
+ESP8266_DISPLAY_IP = '10.204.171.51'

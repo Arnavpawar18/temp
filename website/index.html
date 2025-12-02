@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartPark - Intelligent Parking System</title>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --border: rgba(51, 65, 85, 0.5);
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #eab308;
+            --font-sans: system-ui, -apple-system, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.1) 0%, transparent 20%);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* --- Background Animation (Traffic Flow) --- */
+        .traffic-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .road-line {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            width: 100%;
+            animation: roadMove 3s linear infinite;
+        }
+
+        .road-line:nth-child(1) {
+            top: 20%;
+            animation-duration: 4s;
+        }
+
+        .road-line:nth-child(2) {
+            top: 40%;
+            animation-duration: 3s;
+            animation-delay: 1s;
+        }
+
+        .road-line:nth-child(3) {
+            top: 60%;
+            animation-duration: 5s;
+            animation-delay: 0.5s;
+        }
+
+        .road-line:nth-child(4) {
+            top: 80%;
+            animation-duration: 3.5s;
+        }
+
+        @keyframes roadMove {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* --- Glassmorphism Utilities --- */
+        .glass {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+        }
+
+        /* --- Login Screen --- */
+        .screen {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        #login-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            z-index: 10;
+            width: 100%;
+            max-width: 400px;
+            padding: 1rem;
+        }
+
+        .login-card {
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo-icon-large {
+            display: inline-flex;
+            padding: 0.75rem;
+            background: var(--accent);
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+            }
+        }
+
+        .logo-icon-large svg {
+            color: white;
+            width: 32px;
+            height: 32px;
+        }
+
+        .login-header h1 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .login-header p {
+            color: var(--text-secondary);
+        }
+
+        .role-switcher {
+            display: flex;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 0.25rem;
+            border-radius: 0.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .role-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.625rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .role-btn.active {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            border-color: var(--accent);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.25);
+        }
+
+        /* --- Dashboard Screen --- */
+        #dashboard-screen {
+            display: flex;
+            flex-direction: column;
+        }
+
+        @media (min-width: 768px) {
+            #dashboard-screen {
+                flex-direction: row;
+            }
+        }
+
+        .sidebar {
+            width: 100%;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            z-index: 20;
+        }
+
+        @media (min-width: 768px) {
+            .sidebar {
+                width: 16rem;
+                height: 100vh;
+            }
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .logo-icon-small {
+            padding: 0.5rem;
+            background: var(--accent);
+            border-radius: 0.5rem;
+            display: flex;
+        }
+
+        .logo-icon-small svg {
+            color: white;
+            width: 24px;
+            height: 24px;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            font-weight: bold;
+            background: linear-gradient(to right, #60a5fa, #2563eb);
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .avatar {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            background: linear-gradient(to top right, #3b82f6, #a855f7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+
+        .user-details p:first-child {
+            font-weight: 500;
+        }
+
+        .user-details p:last-child {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: capitalize;
+        }
+
+        .logout-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border: none;
+            background: transparent;
+            color: var(--danger);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* --- Stats & Traffic Light --- */
+        .dashboard-top {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+            align-items: stretch;
+        }
+
+        .stats-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .card {
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .stat-card {
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-icon {
+            padding: 0.75rem;
+            border-radius: 9999px;
+            display: flex;
+        }
+
+        .stat-icon.green {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+        }
+
+        .stat-icon.blue {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+        }
+
+        .stat-icon.purple {
+            background: rgba(168, 85, 247, 0.1);
+            color: #a855f7;
+        }
+
+        .stat-info p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .stat-info h2 {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        /* Traffic Light */
+        .traffic-light-container {
+            width: 80px;
+            background: #000;
+            border-radius: 1rem;
+            padding: 1rem 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            border: 2px solid #333;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        .light {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .light.red.active {
+            background: #ef4444;
+            box-shadow: 0 0 20px #ef4444;
+        }
+
+        .light.yellow.active {
+            background: #eab308;
+            box-shadow: 0 0 20px #eab308;
+        }
+
+        .light.green.active {
+            background: #22c55e;
+            box-shadow: 0 0 20px #22c55e;
+        }
+
+        /* --- Parking Map --- */
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-header h2 {
+            font-size: 1.125rem;
+            font-weight: bold;
+        }
+
+        .parking-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .parking-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .parking-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        .spot-card {
+            position: relative;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+
+        .spot-card:hover {
+            transform: scale(1.05);
+        }
+
+        .spot-card.available {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .spot-card.available:hover {
+            border-color: var(--success);
+            box-shadow: 0 10px 15px -3px rgba(34, 197, 94, 0.2);
+        }
+
+        .spot-card.occupied {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+
+        .spot-card.booked {
+            background: rgba(234, 179, 8, 0.1);
+            border-color: rgba(234, 179, 8, 0.2);
+        }
+
+        .spot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .spot-id {
+            font-weight: bold;
+            font-size: 1.125rem;
+        }
+
+        .status-dot {
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 50%;
+        }
+
+        .spot-card.available .status-dot {
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .spot-card.occupied .status-dot {
+            background: var(--danger);
+            box-shadow: 0 0 10px var(--danger);
+        }
+
+        .spot-card.booked .status-dot {
+            background: var(--warning);
+            box-shadow: 0 0 10px var(--warning);
+        }
+
+        .spot-content {
+            height: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .spot-content span {
+            color: var(--success);
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        /* Car Animation */
+        .car-icon {
+            width: 40px;
+            height: 40px;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .spot-card.occupied .car-icon {
+            animation: parkCar 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        @keyframes parkCar {
+            0% {
+                transform: translateY(100px) scale(0.5);
+                opacity: 0;
+            }
+
+            60% {
+                transform: translateY(-10px) scale(1.1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .spot-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+            backdrop-filter: blur(2px);
+        }
+
+        .spot-card:hover .spot-overlay {
+            opacity: 1;
+        }
+
+        .spot-overlay span {
+            color: white;
+            font-weight: bold;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 50%;
+        }
+
+        .dot.available {
+            background: var(--success);
+        }
+
+        .dot.occupied {
+            background: var(--danger);
+        }
+
+        .dot.booked {
+            background: var(--warning);
+        }
+
+        /* --- Logs Table --- */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge.parked {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+        }
+
+        .badge.exited {
+            background: rgba(148, 163, 184, 0.1);
+            color: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="traffic-bg">
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+        <div class="road-line"></div>
+    </div>
+
+    <div id="app">
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen">
+            <div class="login-container">
+                <div class="login-card glass">
+                    <div class="login-header">
+                        <div class="logo-icon-large">
+                            <i data-lucide="car"></i>
+                        </div>
+                        <h1>Welcome Back</h1>
+                        <p>Sign in to manage your parking</p>
+                    </div>
+
+                    <div class="role-switcher">
+                        <button class="role-btn active" data-role="customer" onclick="setLoginRole('customer')">
+                            <i data-lucide="user"></i> Customer
+                        </button>
+                        <button class="role-btn" data-role="admin" onclick="setLoginRole('admin')">
+                            <i data-lucide="shield"></i> Admin
+                        </button>
+                    </div>
+
+                    <form id="login-form" onsubmit="handleLogin(event)">
+                        <div class="form-group" id="email-group">
+                            <label>Email or Phone</label>
+                            <input type="text" id="email" placeholder="user@example.com" value="user@example.com">
+                        </div>
+                        <div class="form-group hidden" id="parking-id-group">
+                            <label>Parking ID</label>
+                            <input type="text" id="parking-id" placeholder="ADMIN-001">
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="password" placeholder="••••••••" value="password">
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="login-btn">Sign In as Customer</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="dashboard-screen" class="screen hidden">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo-icon-small">
+                        <i data-lucide="car"></i>
+                    </div>
+                    <h1>SmartPark</h1>
+                </div>
+                <nav class="sidebar-nav">
+                    <button class="nav-item active">
+                        <i data-lucide="layout-dashboard"></i> Dashboard
+                    </button>
+                    <button class="nav-item">
+                        <i data-lucide="map"></i> Map View
+                    </button>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="user-info">
+                        <div class="avatar" id="user-avatar">C</div>
+                        <div class="user-details">
+                            <p id="user-email">user@example.com</p>
+                            <p id="user-role">Customer</p>
+                        </div>
+                    </div>
+                    <button class="logout-btn" onclick="handleLogout()">
+                        <i data-lucide="log-out"></i> Logout
+                    </button>
+                </div>
+            </aside>
+
+            <main class="main-content">
+                <div class="dashboard-top">
+                    <div class="stats-grid">
+                        <div class="stat-card glass">
+                            <div class="stat-icon green"><i data-lucide="check-circle"></i></div>
+                            <div class="stat-info">
+                                <p>Available Spots</p>
+                                <h2 id="stat-available">0</h2>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon blue"><i data-lucide="car"></i></div>
+                            <div class="stat-info">
+                                <p>Occupied Spots</p>
+                                <h2 id="stat-occupied">0</h2>
+                            </div>
+                        </div>
+                        <div class="stat-card glass">
+                            <div class="stat-icon purple"><i data-lucide="activity"></i></div>
+                            <div class="stat-info">
+                                <p>Total Capacity</p>
+                                <h2 id="stat-total">5</h2>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Traffic Light Widget -->
+                    <div class="traffic-light-container">
+                        <div id="light-red" class="light red"></div>
+                        <div id="light-yellow" class="light yellow"></div>
+                        <div id="light-green" class="light green"></div>
+                    </div>
+                </div>
+
+                <div class="card map-card glass">
+                    <div class="card-header">
+                        <i data-lucide="map"></i>
+                        <h2>Live Parking Status</h2>
+                    </div>
+                    <div id="parking-grid" class="parking-grid">
+                        <!-- Spots injected by JS -->
+                    </div>
+                    <div class="legend">
+                        <div class="legend-item"><span class="dot available"></span> Available</div>
+                        <div class="legend-item"><span class="dot occupied"></span> Occupied</div>
+                        <div class="legend-item"><span class="dot booked"></span> Booked</div>
+                    </div>
+                </div>
+
+                <div id="logs-section" class="card glass hidden" style="margin-top: 1.5rem;">
+                    <div class="card-header">
+                        <i data-lucide="clock"></i>
+                        <h2>Recent Activity</h2>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Plate Number</th>
+                                    <th>Status</th>
+                                    <th>Entry Time</th>
+                                    <th>Exit Time</th>
+                                    <th>Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-body">
+                                <!-- Logs injected by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let user = null;
+        let data = {
+            available_spots: 5,
+            occupied_spots: 0,
+            spot_statuses: { "A-01": "available", "A-02": "available", "A-03": "available", "A-04": "available", "A-05": "available" },
+            logs: []
+        };
+        let updateInterval = null;
+
+        // DOM Elements
+        const loginScreen = document.getElementById('login-screen');
+        const dashboardScreen = document.getElementById('dashboard-screen');
+        const loginForm = document.getElementById('login-form');
+        const emailGroup = document.getElementById('email-group');
+        const parkingIdGroup = document.getElementById('parking-id-group');
+        const loginBtn = document.getElementById('login-btn');
+        const parkingGrid = document.getElementById('parking-grid');
+        const logsSection = document.getElementById('logs-section');
+        const logsBody = document.getElementById('logs-body');
+
+        // Traffic Lights
+        const lightRed = document.getElementById('light-red');
+        const lightYellow = document.getElementById('light-yellow');
+        const lightGreen = document.getElementById('light-green');
+
+        // Initialize Icons
+        lucide.createIcons();
+
+        // --- Login Logic ---
+        let currentRole = 'customer';
+
+        function setLoginRole(role) {
+            currentRole = role;
+
+            // Update UI
+            document.querySelectorAll('.role-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.role === role);
+            });
+
+            if (role === 'customer') {
+                emailGroup.classList.remove('hidden');
+                parkingIdGroup.classList.add('hidden');
+                loginBtn.textContent = 'Sign In as Customer';
+            } else {
+                emailGroup.classList.add('hidden');
+                parkingIdGroup.classList.remove('hidden');
+                loginBtn.textContent = 'Sign In as Admin';
+            }
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const parkingId = document.getElementById('parking-id').value;
+
+            user = {
+                role: currentRole,
+                email: currentRole === 'customer' ? email : 'admin@smartpark.com'
+            };
+
+            renderApp();
+        }
+
+        function handleLogout() {
+            user = null;
+            if (updateInterval) clearInterval(updateInterval);
+            renderApp();
+        }
+
+        // --- Dashboard Logic ---
+
+        function renderApp() {
+            if (user) {
+                loginScreen.classList.add('hidden');
+                dashboardScreen.classList.remove('hidden');
+
+                // Update User Info
+                document.getElementById('user-email').textContent = user.email;
+                document.getElementById('user-role').textContent = user.role;
+                document.getElementById('user-avatar').textContent = user.role === 'admin' ? 'A' : 'C';
+
+                // Show/Hide Logs based on role
+                if (user.role === 'admin') {
+                    logsSection.classList.remove('hidden');
+                } else {
+                    logsSection.classList.add('hidden');
+                }
+
+                // Start Data Fetch
+                fetchData();
+                updateInterval = setInterval(fetchData, 5000);
+            } else {
+                loginScreen.classList.remove('hidden');
+                dashboardScreen.classList.add('hidden');
+            }
+        }
+
+        function fetchData() {
+            // Mock update
+            // In a real scenario, this would come from the backend
+            // We'll simulate some random changes for the "live" feel
+
+            // Randomly occupy a spot occasionally if we have space
+            if (Math.random() > 0.7 && data.available_spots > 0) {
+                // Find an available spot
+                const availableIds = Object.entries(data.spot_statuses)
+                    .filter(([_, status]) => status === 'available')
+                    .map(([id]) => id);
+
+                if (availableIds.length > 0) {
+                    const randomSpot = availableIds[Math.floor(Math.random() * availableIds.length)];
+                    data.spot_statuses[randomSpot] = 'occupied';
+                }
+            }
+
+            // Randomly free a spot
+            if (Math.random() > 0.8 && data.occupied_spots > 0) {
+                const occupiedIds = Object.entries(data.spot_statuses)
+                    .filter(([_, status]) => status === 'occupied')
+                    .map(([id]) => id);
+
+                if (occupiedIds.length > 0) {
+                    const randomSpot = occupiedIds[Math.floor(Math.random() * occupiedIds.length)];
+                    data.spot_statuses[randomSpot] = 'available';
+                }
+            }
+
+            data.available_spots = Object.values(data.spot_statuses).filter(s => s === 'available').length;
+            data.occupied_spots = Object.values(data.spot_statuses).filter(s => s === 'occupied').length;
+
+            // Mock Logs
+            data.logs = [
+                { plate: "ABC-1234", status: "parked", entry_time: new Date().toISOString(), duration: null },
+                { plate: "XYZ-9876", status: "exited", entry_time: new Date(Date.now() - 3600000).toISOString(), exit_time: new Date().toISOString(), duration: 60 }
+            ];
+
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            // Update Stats
+            document.getElementById('stat-available').textContent = data.available_spots;
+            document.getElementById('stat-occupied').textContent = data.occupied_spots;
+
+            // Update Traffic Light
+            updateTrafficLight();
+
+            // Render Map
+            parkingGrid.innerHTML = '';
+            Object.entries(data.spot_statuses).forEach(([id, status], index) => {
+                const card = document.createElement('div');
+                card.className = `spot-card ${status}`;
+
+                let iconHtml = '';
+                if (status === 'available') {
+                    iconHtml = '<span>Free</span>';
+                } else {
+                    const color = status === 'occupied' ? 'text-red-500' : 'text-yellow-500';
+                    // Car Icon with Animation Class
+                    iconHtml = `<i data-lucide="car" class="car-icon ${color}"></i>`;
+                }
+
+                let overlayHtml = '';
+                if (status === 'available' && user.role === 'customer') {
+                    overlayHtml = `
+                        <div class="spot-overlay">
+                            <span>Book Now</span>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="spot-header">
+                        <span class="spot-id">${id}</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <div class="spot-content">
+                        ${iconHtml}
+                    </div>
+                    ${overlayHtml}
+                `;
+
+                if (status === 'available' && user.role === 'customer') {
+                    card.onclick = () => handleBook(id);
+                }
+
+                parkingGrid.appendChild(card);
+            });
+
+            // Render Logs
+            if (user.role === 'admin') {
+                logsBody.innerHTML = '';
+                data.logs.forEach(log => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td style="font-family: monospace; font-weight: bold;">${log.plate}</td>
+                        <td><span class="badge ${log.status}">${log.status === 'parked' ? 'Parked' : 'Exited'}</span></td>
+                        <td>${new Date(log.entry_time).toLocaleTimeString()}</td>
+                        <td>${log.exit_time ? new Date(log.exit_time).toLocaleTimeString() : '-'}</td>
+                        <td style="font-family: monospace;">${log.duration ? log.duration + 'm' : '-'}</td>
+                    `;
+                    logsBody.appendChild(row);
+                });
+            }
+
+            // Refresh Icons for new elements
+            lucide.createIcons();
+        }
+
+        function updateTrafficLight() {
+            // Reset lights
+            lightRed.classList.remove('active');
+            lightYellow.classList.remove('active');
+            lightGreen.classList.remove('active');
+
+            if (data.available_spots === 0) {
+                lightRed.classList.add('active');
+            } else if (data.available_spots < 3) {
+                lightYellow.classList.add('active');
+            } else {
+                lightGreen.classList.add('active');
+            }
+        }
+
+        function handleBook(spotId) {
+            // Optimistic update
+            data.spot_statuses[spotId] = 'booked';
+            data.available_spots--;
+            updateDashboard();
+        }
+
+        // Initial Render
+        renderApp();
+    </script>
+</body>
+
+</html>
