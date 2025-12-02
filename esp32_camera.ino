@@ -15,7 +15,7 @@ IPAddress primaryDNS(8, 8, 8, 8);           // Google DNS
 IPAddress secondaryDNS(8, 8, 4, 4);         // Google DNS
 
 // Server IP (your laptop)
-const char* serverURL = "http://10.204.171.224:5000/api/analyze-plate";
+const char* serverURL = "http://10.137.170.161:5000/api/analyze-plate";
 
 // Camera pins (AI-Thinker ESP32-CAM)
 #define PWDN_GPIO_NUM     32
@@ -46,10 +46,8 @@ void setup() {
   pinMode(FLASH_LED_PIN, OUTPUT);
   digitalWrite(FLASH_LED_PIN, LOW);
   
-  // Configure static IP
-  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("Static IP failed");
-  }
+  // Use DHCP to get IP on same subnet as laptop
+  // Removed static IP configuration
   
   // Camera config
   camera_config_t config;
@@ -91,11 +89,11 @@ void setup() {
   // Test server connectivity on boot
   Serial.println("\nTesting server connection...");
   WiFiClient testClient;
-  if (testClient.connect("10.204.171.224", 5000)) {
+  if (testClient.connect("10.137.170.161", 5000)) {
     Serial.println("✅ Server is reachable!");
     testClient.stop();
   } else {
-    Serial.println("❌ Cannot reach server at 10.204.171.224:5000");
+    Serial.println("❌ Cannot reach server at 10.137.170.161:5000");
     Serial.println("Check: 1) Flask running 2) Firewall 3) Same network");
   }
   
@@ -158,11 +156,11 @@ void captureAndSend() {
   
   // Test connectivity first
   WiFiClient testClient;
-  Serial.println("Testing connection to 10.204.171.224:5000...");
-  if (!testClient.connect("10.204.171.224", 5000)) {
+  Serial.println("Testing connection to 10.137.170.161:5000...");
+  if (!testClient.connect("10.137.170.161", 5000)) {
     Serial.println("❌ Cannot connect to server! Check:");
     Serial.println("  1. Flask server running?");
-    Serial.println("  2. Server IP = 10.204.171.224?");
+    Serial.println("  2. Server IP = 10.137.170.161?");
     Serial.println("  3. Windows Firewall port 5000 open?");
     esp_camera_fb_return(fb);
     return;
