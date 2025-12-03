@@ -7,17 +7,10 @@
 const char* ssid = "parking";
 const char* password = "0000011111";
 
-// Static IP configuration
-IPAddress local_IP(10, 109, 142, 100);      // ESP32-CAM static IP
-IPAddress gateway(10, 109, 142, 81);        // Router gateway
-IPAddress subnet(255, 255, 255, 0);         // Subnet mask
-IPAddress primaryDNS(8, 8, 8, 8);           // Google DNS
-IPAddress secondaryDNS(8, 8, 4, 4);         // Google DNS
-
 // Server IP (your laptop)
 const char* serverURL = "http://10.137.170.161:5000/api/analyze-plate";
 
-// Camera pins (AI-Thinker ESP32-CAM)
+// Camera pins (AI-Thinker ESP32-CAM)a
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0

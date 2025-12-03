@@ -4,14 +4,7 @@
 
 const char* ssid = "parking";
 const char* password = "0000011111";
-const char* esp32camIP = "10.109.142.100";  // ESP32-CAM static IP
-
-// Static IP configuration
-IPAddress local_IP(10, 109, 142, 101);      // ESP8266 static IP
-IPAddress gateway(10, 109, 142, 81);        // Router gateway
-IPAddress subnet(255, 255, 255, 0);         // Subnet mask
-IPAddress primaryDNS(8, 8, 8, 8);           // Google DNS
-IPAddress secondaryDNS(8, 8, 4, 4);         // Google DNS
+const char* esp32camIP = "10.137.170.68";  // ESP32-CAM IP
 
 #define ENTRY_IR_PIN D1
 #define EXIT_IR_PIN D2
@@ -25,6 +18,7 @@ bool exitIRState = false;
 bool gateOpen = false;
 unsigned long lastTrigger = 0;
 unsigned long gateOpenTime = 0;
+String gateStatus = "Gate Closed";
 
 void setup() {
   Serial.begin(115200);
@@ -34,10 +28,7 @@ void setup() {
   gateServo.attach(SERVO_PIN);
   gateServo.write(0);
   
-  // Configure static IP
-  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("Static IP failed");
-  }
+  // Use DHCP to get IP on same subnet
   
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -46,7 +37,7 @@ void setup() {
   }
   Serial.println("IP: " + WiFi.localIP().toString());
   
-  server.on("/status", []() { server.send(200, "text/plain", "OK"); });
+  server.on("/status", []() { server.send(200, "text/plain", gateStatus); });
   server.on("/gate", handleGate);
   server.begin();
 }
@@ -57,6 +48,8 @@ void loop() {
   if (gateOpen && (millis() - gateOpenTime > 5000)) {
     gateServo.write(0);
     gateOpen = false;
+    gateStatus = "Gate Closed";
+    Serial.println("GATE AUTO-CLOSED");
   }
   
   if (millis() - lastTrigger < 2000) {
@@ -92,7 +85,7 @@ void triggerCam(String type) {
     unsigned long t = millis();
     while (client.available() == 0 && millis() - t < 5000);
     client.stop();
-    Serial.println("Camera OK");
+    Serial.println("Camera triggered for " + type);
   }
 }
 
@@ -102,13 +95,17 @@ void handleGate() {
       gateServo.write(90);
       gateOpen = true;
       gateOpenTime = millis();
-      server.send(200, "text/plain", "Opened");
-      Serial.println("GATE OPEN");
+      gateStatus = "Gate Opening - Plate Detected";
+      server.send(200, "text/plain", gateStatus);
+      Serial.println("GATE OPEN - PLATE DETECTED");
     } else {
       gateServo.write(0);
       gateOpen = false;
-      server.send(200, "text/plain", "Closed");
-      Serial.println("GATE CLOSE");
+      gateStatus = "Gate Remains Closed - No Plate Detected";
+      server.send(200, "text/plain", gateStatus);
+      Serial.println("GATE CLOSED - NO PLATE");
     }
+  } else {
+    server.send(200, "text/plain", gateStatus);
   }
 }

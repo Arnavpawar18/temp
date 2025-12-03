@@ -166,7 +166,20 @@
         }
 
         updateParkedCars();
-        setInterval(updateParkedCars, 1000); // Update every second for live billing
+        setInterval(updateParkedCars, 2000); // Update every 2 seconds for live billing
+        
+        // Check system status every 30 seconds
+        setInterval(checkSystemStatus, 30000);
+        
+        function checkSystemStatus() {
+            fetch('/api/system_status')
+                .then(r => r.json())
+                .then(data => {
+                    console.log('System Status:', data);
+                    // You can add visual indicators here if needed
+                })
+                .catch(e => console.log('Status check failed:', e));
+        }
     </script>
 </body>
 </html>

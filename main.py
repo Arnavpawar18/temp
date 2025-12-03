@@ -1,21 +1,23 @@
 import json
 import os
 import base64
+import time
 from io import BytesIO
 import requests
 from datetime import datetime
 
 import google.genai as genai
 from flask import Flask, jsonify, request, send_file, send_from_directory, render_template, session, redirect, url_for
+from flask_cors import CORS
 from PIL import Image
 from pymongo import MongoClient
 from urllib.parse import quote_plus
 
 # Configuration
-API_KEY = 'AIzaSyDFwuo4Tv_GPRaAbVXgt0QsHfveM71daPU'
-ESP32_CAM_IP = '10.109.142.100'     # ESP32-CAM static IP
-ESP8266_ENTRY_IP = '10.109.142.101' # ESP1 ESP8266 static IP
-ESP8266_DISPLAY_IP = '10.109.142.102' # ESP2 ZY-ESP32 static IP
+API_KEY = ''  # Replace with new Google AI API key
+ESP32_CAM_IP = '10.137.170.68'     # ESP32-CAM static IP
+ESP8266_ENTRY_IP = '10.137.170.52' # ESP1 ESP8266 static IP
+ESP8266_DISPLAY_IP = '10.137.170.70' # ESP2 ZY-ESP32 static IP
 MAX_RETRIES = 5
 PER_MINUTE_RATE = 10  # ₹10 per minute
 MINIMUM_CHARGE = 10   # ₹10 minimum
@@ -42,7 +44,9 @@ except Exception as e:
 
 ai = genai.Client(api_key=API_KEY)
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 app.secret_key = 'parking_system_secret_key_2024'  # Change this to a random secret key
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 retry_count = {}
 
 # Admin credentials
@@ -88,15 +92,23 @@ def admin_logout():
 @app.route("/api/control_gate", methods=["POST"])
 def control_gate():
     """Admin gate control"""
+    # Check admin authentication
+    if not session.get('admin_logged_in'):
+        return jsonify({'success': False, 'message': 'Unauthorized access'})
+    
     data = request.get_json()
     gate_type = data.get('type')  # 'entry' or 'exit'
     action = data.get('action')  # 'open' or 'close'
     
-    try:
-        trigger_esp8266_gate(action)
+    print(f"🔐 Admin gate control: {gate_type} gate {action}")
+    
+    gate_success = trigger_esp8266_gate(action)
+    if gate_success:
+        print(f"✅ Admin gate command successful: {action}")
         return jsonify({'success': True, 'message': f'{gate_type.title()} gate {action}ed successfully'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+    else:
+        print(f"❌ Admin gate command failed: {action}")
+        return jsonify({'success': False, 'message': 'Gate controller timeout - check ESP8266 connection. Try running esp8266_connection_test.py for diagnostics.'})
 
 @app.route("/api/admin_stats")
 def admin_stats():
@@ -211,14 +223,33 @@ def trigger_esp32_capture(use_flash=False):
         pass
 
 def trigger_esp8266_gate(action):
-    """Send gate control signal to ESP8266 Entry/Exit Controller"""
-    try:
-        url = f"http://{ESP8266_ENTRY_IP}/gate"
-        params = {'action': action}  # 'open' or 'close'
-        requests.get(url, params=params, timeout=5)
-        print(f"🚪 Gate command sent: {action}")
-    except Exception as e:
-        print(f"❌ Gate command failed: {e}")
+    """Send gate control signal to ESP8266 Entry/Exit Controller with retry logic"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            url = f"http://{ESP8266_ENTRY_IP}/gate"
+            params = {'action': action}  # 'open' or 'close'
+            response = requests.get(url, params=params, timeout=5)  # Reduced timeout
+            if response.status_code == 200:
+                print(f"🚪 Gate command sent: {action} (attempt {attempt + 1})")
+                return True
+            else:
+                print(f"❌ Gate command failed: HTTP {response.status_code} (attempt {attempt + 1})")
+        except requests.exceptions.Timeout:
+            print(f"⏰ Gate command timeout (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                time.sleep(1)  # Wait before retry
+        except requests.exceptions.ConnectionError:
+            print(f"🔌 Gate connection error (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+        except Exception as e:
+            print(f"❌ Gate command error: {e} (attempt {attempt + 1}/{max_retries})")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+    
+    print(f"❌ Gate command failed after {max_retries} attempts")
+    return False
 
 def calculate_bill(entry_time):
     """Calculate parking bill"""
@@ -315,14 +346,17 @@ def analyze_plate():
                 # Trigger ESP32 to capture again (bypass ESP8266)
                 use_flash = current_retry >= 3
                 trigger_esp32_capture(use_flash)
+                print(f"🔄 GATE REMAINS CLOSED - Image unclear, retrying... (attempt {current_retry + 1})")
                 return jsonify({
                     "error": "Image unclear, retrying...", 
                     "retry": current_retry + 1,
-                    "flash": use_flash
+                    "flash": use_flash,
+                    "gate_status": "Gate Remains Closed - Retrying Image Capture"
                 })
             else:
                 retry_count[client_ip] = 0
-                return jsonify({"error": "Max retries reached, image still unclear"})
+                print(f"🚫 GATE REMAINS CLOSED - Max retries reached, no clear plate detected")
+                return jsonify({"error": "Max retries reached, image still unclear", "gate_status": "Gate Remains Closed - No Clear Plate Detected"})
         
         # Success - process the plate
         retry_count[client_ip] = 0
@@ -352,7 +386,8 @@ def handle_entry(plate_number):
         })
         
         if booking and booking.get('entry_time'):
-            return jsonify({"error": "Car already parked", "action": "deny"})
+            print(f"🚫 GATE REMAINS CLOSED - Car {plate_number} already parked")
+            return jsonify({"error": "Car already parked", "action": "deny", "gate_status": "Gate Remains Closed - Car Already Parked"})
         
         # Update booking with entry time or create new entry
         if booking:
@@ -373,7 +408,11 @@ def handle_entry(plate_number):
             cars_collection.insert_one(entry_record)
         
         # Trigger gate to open
-        trigger_esp8266_gate('open')
+        gate_success = trigger_esp8266_gate('open')
+        if gate_success:
+            print(f"🚪 GATE OPENING - Plate {plate_number} detected and verified")
+        else:
+            print(f"⚠️ GATE COMMAND FAILED - Plate {plate_number} detected but gate may not open")
         
         # Notify display controller about new entry
         try:
@@ -388,7 +427,8 @@ def handle_entry(plate_number):
             "success": True,
             "plate_text": plate_number,
             "action": "allow",
-            "booking_id": booking_id
+            "booking_id": booking_id,
+            "gate_status": "Gate Opening - Plate Detected"
         })
         
     except Exception as e:
@@ -404,7 +444,8 @@ def handle_exit(plate_number):
         })
         
         if not car_record:
-            return jsonify({"error": "Car not found or already exited"})
+            print(f"🚫 GATE REMAINS CLOSED - Car {plate_number} not found or already exited")
+            return jsonify({"error": "Car not found or already exited", "gate_status": "Gate Remains Closed - Car Not Found"})
         
         # Calculate bill
         bill_amount = calculate_bill(car_record['entry_time'])
@@ -425,13 +466,18 @@ def handle_exit(plate_number):
             print(f"❌ Display bill failed: {e}")
         
         # Open gate for exit
-        trigger_esp8266_gate('open')
+        gate_success = trigger_esp8266_gate('open')
+        if gate_success:
+            print(f"🚪 GATE OPENING - Exit approved for {plate_number}, Bill: Rs.{bill_amount}")
+        else:
+            print(f"⚠️ GATE COMMAND FAILED - Exit approved for {plate_number} but gate may not open")
         
         return jsonify({
             "success": True,
             "plate_text": plate_number,
             "bill_amount": bill_amount,
-            "action": "exit"
+            "action": "exit",
+            "gate_status": "Gate Opening - Exit Approved"
         })
         
     except Exception as e:
@@ -475,6 +521,38 @@ def status():
         "esp8266_display_ip": ESP8266_DISPLAY_IP
     })
 
+@app.route('/api/system_status')
+def system_status():
+    """Check connectivity to all ESP devices"""
+    devices = {
+        "esp32_cam": {"ip": ESP32_CAM_IP, "status": "unknown"},
+        "esp8266_entry": {"ip": ESP8266_ENTRY_IP, "status": "unknown"},
+        "esp32_display": {"ip": ESP8266_DISPLAY_IP, "status": "unknown"}
+    }
+    
+    # Test ESP32-CAM
+    try:
+        response = requests.get(f"http://{ESP32_CAM_IP}/status", timeout=3)
+        devices["esp32_cam"]["status"] = "online" if response.status_code == 200 else "error"
+    except:
+        devices["esp32_cam"]["status"] = "offline"
+    
+    # Test ESP8266 Entry Controller
+    try:
+        response = requests.get(f"http://{ESP8266_ENTRY_IP}/status", timeout=3)
+        devices["esp8266_entry"]["status"] = "online" if response.status_code == 200 else "error"
+    except:
+        devices["esp8266_entry"]["status"] = "offline"
+    
+    # Test ESP32 Display Controller
+    try:
+        response = requests.get(f"http://{ESP8266_DISPLAY_IP}/status", timeout=3)
+        devices["esp32_display"]["status"] = "online" if response.status_code == 200 else "error"
+    except:
+        devices["esp32_display"]["status"] = "offline"
+    
+    return jsonify(devices)
+
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory('web', path)
@@ -486,4 +564,6 @@ if __name__ == "__main__":
     print(f"ESP8266 Entry IP: {ESP8266_ENTRY_IP}")
     print(f"ESP32 Display IP: {ESP8266_DISPLAY_IP}")
     print("===================================\n")
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    
+    # Run without debug mode to prevent transformers reloading
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)

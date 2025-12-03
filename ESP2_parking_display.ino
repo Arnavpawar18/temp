@@ -9,15 +9,8 @@
 const char* ssid = "parking";
 const char* password = "0000011111";
 
-// Static IP configuration
-IPAddress local_IP(10, 109, 142, 102);      // ESP32 static IP
-IPAddress gateway(10, 109, 142, 81);        // Router gateway
-IPAddress subnet(255, 255, 255, 0);         // Subnet mask
-IPAddress primaryDNS(8, 8, 8, 8);           // Google DNS
-IPAddress secondaryDNS(8, 8, 4, 4);         // Google DNS
-
-// Server IP
-const char* serverIP = "10.204.171.224";    // Your laptop IP
+// Server IP (will be updated with actual laptop IP)
+const char* serverIP = "10.137.170.161";    // Flask server IP
 
 // Pin definitions for ESP32 (boot-safe pins)
 #define OLED_SDA        21  // GPIO21
@@ -70,9 +63,9 @@ void setup() {
   display.display();
   
   // Configure static IP
-  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("Static IP failed");
-  }
+  WiFi.config(IPAddress(10, 137, 170, 70), 
+             IPAddress(10, 137, 170, 1), 
+             IPAddress(255, 255, 255, 0));
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
@@ -115,20 +108,20 @@ void loop() {
 
 void handleSetPlate() {
   String body = server.arg("plain");
-  Serial.println("📝 Plate notification: " + body);
+  Serial.println("[PLATE] Plate notification: " + body);
   
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, body);
   
   if (error) {
-    Serial.println("❌ JSON parse error");
+    Serial.println("[ERROR] JSON parse error");
     server.send(400, "text/plain", "Invalid JSON");
     return;
   }
   
   lastPlate = doc["plate"].as<String>();
-  Serial.println("📝 Last plate set to: " + lastPlate);
-  Serial.println("🔍 Checking slots immediately...");
+  Serial.println("[PLATE] Last plate set to: " + lastPlate);
+  Serial.println("[CHECK] Checking slots immediately...");
   
   server.send(200, "text/plain", "Plate set");
   
@@ -139,13 +132,13 @@ void handleSetPlate() {
 
 void handleDisplayBill() {
   String body = server.arg("plain");
-  Serial.println("💰 Bill request: " + body);
+  Serial.println("[BILL] Bill request: " + body);
   
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, body);
   
   if (error) {
-    Serial.println("❌ JSON parse error");
+    Serial.println("[ERROR] JSON parse error");
     server.send(400, "text/plain", "Invalid JSON");
     return;
   }
@@ -201,7 +194,7 @@ void displayBill(String plate, int amount) {
   display.println("Thank you!");
   display.display();
   
-  Serial.println("💰 Bill displayed: " + plate + " - Rs." + String(amount));
+  Serial.println("[BILL] Bill displayed: " + plate + " - Rs." + String(amount));
   
   // Auto clear after 10 seconds
   delay(10000);
@@ -214,22 +207,36 @@ void checkParkingSlotsImmediate() {
   bool slot3 = !digitalRead(SLOT3_IR_PIN);
   bool slot4 = !digitalRead(SLOT4_IR_PIN);
   
-  Serial.println("🔍 Slot status: 1=" + String(slot1) + " 2=" + String(slot2) + " 3=" + String(slot3) + " 4=" + String(slot4));
+  Serial.println("[CHECK] Slot status: 1=" + String(slot1) + " 2=" + String(slot2) + " 3=" + String(slot3) + " 4=" + String(slot4));
   
-  if (lastPlate != "" && (slot1 || slot2 || slot3 || slot4)) {
-    int occupiedSlot = 0;
-    if (slot1) occupiedSlot = 1;
-    else if (slot2) occupiedSlot = 2;
-    else if (slot3) occupiedSlot = 3;
-    else if (slot4) occupiedSlot = 4;
-    
-    if (occupiedSlot > 0) {
-      Serial.println("✅ Car detected in slot " + String(occupiedSlot));
-      updateSlotStatus(lastPlate, occupiedSlot);
-      lastPlate = "";
+  // Check if any car is detected
+  if (slot1 || slot2 || slot3 || slot4) {
+    if (lastPlate != "") {
+      // Valid plate detected, allow parking
+      int occupiedSlot = 0;
+      if (slot1) occupiedSlot = 1;
+      else if (slot2) occupiedSlot = 2;
+      else if (slot3) occupiedSlot = 3;
+      else if (slot4) occupiedSlot = 4;
+      
+      if (occupiedSlot > 0) {
+        Serial.println("[DETECT] Car with plate " + lastPlate + " detected in slot " + String(occupiedSlot));
+        updateSlotStatus(lastPlate, occupiedSlot);
+        lastPlate = "";
+      }
+    } else {
+      // No plate detected, reject parking
+      int occupiedSlot = 0;
+      if (slot1) occupiedSlot = 1;
+      else if (slot2) occupiedSlot = 2;
+      else if (slot3) occupiedSlot = 3;
+      else if (slot4) occupiedSlot = 4;
+      
+      Serial.println("[REJECT] Vehicle without number plate detected in slot " + String(occupiedSlot) + " - PARKING DENIED");
+      displayRejectionMessage(occupiedSlot);
     }
   } else if (lastPlate != "") {
-    Serial.println("⚠️ Plate set but no car detected in any slot yet");
+    Serial.println("[WAIT] Plate set but no car detected in any slot yet");
   }
 }
 
@@ -239,6 +246,26 @@ void checkParkingSlots() {
   lastSlotCheck = millis();
   
   checkParkingSlotsImmediate();
+}
+
+void displayRejectionMessage(int slot) {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.setTextSize(1);
+  display.println("PARKING DENIED");
+  display.println("==============");
+  display.println("");
+  display.println("No Number Plate");
+  display.println("Detected!");
+  display.println("");
+  display.println("Please show your");
+  display.println("number plate to");
+  display.println("the camera first");
+  display.display();
+  
+  // Auto clear after 5 seconds
+  delay(5000);
+  updateMainDisplay();
 }
 
 void updateSlotStatus(String plate, int slot) {
@@ -252,7 +279,7 @@ void updateSlotStatus(String plate, int slot) {
   
   int httpCode = http.POST(payload);
   if (httpCode > 0) {
-    Serial.println("🅿️ Slot updated: " + plate + " in slot " + String(slot));
+    Serial.println("[UPDATE] Slot updated: " + plate + " in slot " + String(slot));
   }
   
   http.end();
