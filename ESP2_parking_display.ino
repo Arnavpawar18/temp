@@ -1,8 +1,6 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WebServer.h>
-#include <Wire.h>
-#include <Adafruit_SSD1306.h>
 #include <ArduinoJson.h>
 
 // WiFi credentials
@@ -10,37 +8,34 @@ const char* ssid = "parking";
 const char* password = "0000011111";
 
 // Server IP (will be updated with actual laptop IP)
-const char* serverIP = "10.137.170.161";    // Flask server IP
+const char* serverIP = "10.137.170.161";    // Your laptop IP
 
 // Pin definitions for ESP32 (boot-safe pins)
-#define OLED_SDA        21  // GPIO21
-#define OLED_SCL        22  // GPIO22
 #define SLOT1_IR_PIN    32  // GPIO32
 #define SLOT2_IR_PIN    33  // GPIO33
 #define SLOT3_IR_PIN    25  // GPIO25
 #define SLOT4_IR_PIN    26  // GPIO26
-
-// OLED display
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // Web server for receiving commands from Flask server
 WebServer server(80);
 
 // State variables
 String lastPlate = "";
+String gateStatus = "Gate Closed";
+String lastMessage = "System Ready";
+bool messageIsError = false;
 
 void setup() {
   Serial.begin(115200);
   delay(2000);
   
-  Serial.println("\n=== ESP32 Parking Slot Monitor ===");
+  Serial.println("\n=== ESP32 Parking Display Controller ===");
   Serial.println("IR Sensor Pins:");
   Serial.println("Slot 1: GPIO32");
   Serial.println("Slot 2: GPIO33");
   Serial.println("Slot 3: GPIO25");
   Serial.println("Slot 4: GPIO26");
+  Serial.println("Web Interface: http://[ESP_IP]/");
   Serial.println("================================\n");
   
   // Initialize pins
@@ -49,23 +44,11 @@ void setup() {
   pinMode(SLOT3_IR_PIN, INPUT_PULLUP);
   pinMode(SLOT4_IR_PIN, INPUT_PULLUP);
   
-  // Initialize OLED
-  Wire.begin(OLED_SDA, OLED_SCL);
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("SSD1306 allocation failed");
-  }
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(0,0);
-  display.println("Smart Parking");
-  display.println("System Ready");
-  display.display();
+  // Initialize web interface
+  lastMessage = "System Ready";
+  messageIsError = false;
   
-  // Configure static IP
-  WiFi.config(IPAddress(10, 137, 170, 70), 
-             IPAddress(10, 137, 170, 1), 
-             IPAddress(255, 255, 255, 0));
+  // Use DHCP to get IP on same subnet
   
   // Connect to WiFi
   WiFi.begin(ssid, password);
@@ -76,22 +59,25 @@ void setup() {
   Serial.println("WiFi connected: " + WiFi.localIP().toString());
   
   // Setup web server endpoints
+  server.on("/", handleRoot);
   server.on("/display_bill", HTTP_POST, handleDisplayBill);
   server.on("/set_plate", HTTP_POST, handleSetPlate);
+  server.on("/api/status", handleAPIStatus);
   server.on("/status", []() {
     server.send(200, "text/plain", "Parking/Display Controller Ready (ESP32)");
   });
   server.begin();
   
   Serial.println("ESP32 Parking/Display Controller Ready");
+  Serial.println("Access web interface at: http://" + WiFi.localIP().toString());
 }
 
 void loop() {
   server.handleClient();
   
-  // Debug: Print raw sensor values every 2 seconds
+  // Debug: Print raw sensor values every 5 seconds
   static unsigned long lastDebug = 0;
-  if (millis() - lastDebug > 2000) {
+  if (millis() - lastDebug > 5000) {
     lastDebug = millis();
     int raw1 = digitalRead(SLOT1_IR_PIN);
     int raw2 = digitalRead(SLOT2_IR_PIN);
@@ -106,22 +92,75 @@ void loop() {
   delay(100);
 }
 
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><title>Parking Display</title>";
+  html += "<meta http-equiv='refresh' content='2'>";
+  html += "<style>body{font-family:Arial;margin:20px;background:#f0f0f0;}";
+  html += ".container{max-width:600px;margin:0 auto;background:white;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
+  html += ".status{padding:15px;margin:10px 0;border-radius:5px;font-weight:bold;}";
+  html += ".success{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}";
+  html += ".error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}";
+  html += ".info{background:#d1ecf1;color:#0c5460;border:1px solid #bee5eb;}";
+  html += ".slots{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:20px 0;}";
+  html += ".slot{padding:20px;text-align:center;border-radius:5px;font-size:18px;font-weight:bold;}";
+  html += ".available{background:#d4edda;color:#155724;}";
+  html += ".occupied{background:#f8d7da;color:#721c24;}";
+  html += "h1{color:#333;text-align:center;}";
+  html += "</style></head><body>";
+  html += "<div class='container'>";
+  html += "<h1>🅿️ Smart Parking System</h1>";
+  
+  // Gate Status
+  String statusClass = gateStatus.indexOf("Opening") >= 0 ? "success" : "info";
+  html += "<div class='status " + statusClass + "'>🚪 " + gateStatus + "</div>";
+  
+  // Last Message
+  String msgClass = messageIsError ? "error" : "success";
+  html += "<div class='status " + msgClass + "'>📢 " + lastMessage + "</div>";
+  
+  // Available Slots
+  html += "<h2>Available Parking Slots</h2>";
+  html += "<div class='slots'>";
+  
+  bool slot1 = !digitalRead(SLOT1_IR_PIN);
+  bool slot2 = !digitalRead(SLOT2_IR_PIN);
+  bool slot3 = !digitalRead(SLOT3_IR_PIN);
+  bool slot4 = !digitalRead(SLOT4_IR_PIN);
+  
+  html += "<div class='slot " + String(slot1 ? "occupied" : "available") + "'>Slot 1<br>" + String(slot1 ? "🚗 OCCUPIED" : "✅ AVAILABLE") + "</div>";
+  html += "<div class='slot " + String(slot2 ? "occupied" : "available") + "'>Slot 2<br>" + String(slot2 ? "🚗 OCCUPIED" : "✅ AVAILABLE") + "</div>";
+  html += "<div class='slot " + String(slot3 ? "occupied" : "available") + "'>Slot 3<br>" + String(slot3 ? "🚗 OCCUPIED" : "✅ AVAILABLE") + "</div>";
+  html += "<div class='slot " + String(slot4 ? "occupied" : "available") + "'>Slot 4<br>" + String(slot4 ? "🚗 OCCUPIED" : "✅ AVAILABLE") + "</div>";
+  
+  html += "</div>";
+  html += "<p style='text-align:center;color:#666;margin-top:20px;'>Last updated: " + String(millis()/1000) + "s</p>";
+  html += "</div></body></html>";
+  
+  server.send(200, "text/html", html);
+}
+
 void handleSetPlate() {
   String body = server.arg("plain");
-  Serial.println("[PLATE] Plate notification: " + body);
+  Serial.println("📝 Plate notification: " + body);
   
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, body);
   
   if (error) {
-    Serial.println("[ERROR] JSON parse error");
+    Serial.println("❌ JSON parse error");
+    lastMessage = "Error: Invalid plate data received";
+    messageIsError = true;
     server.send(400, "text/plain", "Invalid JSON");
     return;
   }
   
   lastPlate = doc["plate"].as<String>();
-  Serial.println("[PLATE] Last plate set to: " + lastPlate);
-  Serial.println("[CHECK] Checking slots immediately...");
+  gateStatus = "Gate Opening - Plate Detected";
+  lastMessage = "Vehicle " + lastPlate + " detected - Checking slots...";
+  messageIsError = false;
+  
+  Serial.println("📝 Last plate set to: " + lastPlate);
+  Serial.println("🔍 Checking slots immediately...");
   
   server.send(200, "text/plain", "Plate set");
   
@@ -132,13 +171,15 @@ void handleSetPlate() {
 
 void handleDisplayBill() {
   String body = server.arg("plain");
-  Serial.println("[BILL] Bill request: " + body);
+  Serial.println("💰 Bill request: " + body);
   
   DynamicJsonDocument doc(1024);
   DeserializationError error = deserializeJson(doc, body);
   
   if (error) {
-    Serial.println("[ERROR] JSON parse error");
+    Serial.println("❌ JSON parse error");
+    lastMessage = "Error: Invalid bill data received";
+    messageIsError = true;
     server.send(400, "text/plain", "Invalid JSON");
     return;
   }
@@ -146,59 +187,13 @@ void handleDisplayBill() {
   String plate = doc["plate"];
   int amount = doc["amount"];
   
-  displayBill(plate, amount);
+  gateStatus = "Gate Opening - Exit Approved";
+  lastMessage = "Bill: " + plate + " - Rs." + String(amount) + " - Thank you!";
+  messageIsError = false;
+  
+  Serial.println("💰 Bill displayed: " + plate + " - Rs." + String(amount));
+  
   server.send(200, "text/plain", "Bill displayed");
-}
-
-void updateMainDisplay() {
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.setTextSize(1);
-  display.println("Smart Parking");
-  display.println("System Ready");
-  display.println("");
-  display.println("Available Slots:");
-  
-  // Show available slots
-  bool slot1 = !digitalRead(SLOT1_IR_PIN);
-  bool slot2 = !digitalRead(SLOT2_IR_PIN);
-  bool slot3 = !digitalRead(SLOT3_IR_PIN);
-  bool slot4 = !digitalRead(SLOT4_IR_PIN);
-  
-  display.print("1:");
-  display.print(slot1 ? "X" : "O");
-  display.print(" 2:");
-  display.print(slot2 ? "X" : "O");
-  display.print(" 3:");
-  display.print(slot3 ? "X" : "O");
-  display.print(" 4:");
-  display.println(slot4 ? "X" : "O");
-  
-  display.display();
-}
-
-void displayBill(String plate, int amount) {
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.setTextSize(1);
-  display.println("PARKING BILL");
-  display.println("============");
-  display.println("");
-  display.setTextSize(1);
-  display.println("Plate: " + plate);
-  display.println("");
-  display.setTextSize(2);
-  display.println("Rs." + String(amount));
-  display.setTextSize(1);
-  display.println("");
-  display.println("Thank you!");
-  display.display();
-  
-  Serial.println("[BILL] Bill displayed: " + plate + " - Rs." + String(amount));
-  
-  // Auto clear after 10 seconds
-  delay(10000);
-  updateMainDisplay(); // Reset to main screen
 }
 
 void checkParkingSlotsImmediate() {
@@ -207,36 +202,26 @@ void checkParkingSlotsImmediate() {
   bool slot3 = !digitalRead(SLOT3_IR_PIN);
   bool slot4 = !digitalRead(SLOT4_IR_PIN);
   
-  Serial.println("[CHECK] Slot status: 1=" + String(slot1) + " 2=" + String(slot2) + " 3=" + String(slot3) + " 4=" + String(slot4));
+  Serial.println("🔍 Slot status: 1=" + String(slot1) + " 2=" + String(slot2) + " 3=" + String(slot3) + " 4=" + String(slot4));
   
-  // Check if any car is detected
-  if (slot1 || slot2 || slot3 || slot4) {
-    if (lastPlate != "") {
-      // Valid plate detected, allow parking
-      int occupiedSlot = 0;
-      if (slot1) occupiedSlot = 1;
-      else if (slot2) occupiedSlot = 2;
-      else if (slot3) occupiedSlot = 3;
-      else if (slot4) occupiedSlot = 4;
-      
-      if (occupiedSlot > 0) {
-        Serial.println("[DETECT] Car with plate " + lastPlate + " detected in slot " + String(occupiedSlot));
-        updateSlotStatus(lastPlate, occupiedSlot);
-        lastPlate = "";
-      }
-    } else {
-      // No plate detected, reject parking
-      int occupiedSlot = 0;
-      if (slot1) occupiedSlot = 1;
-      else if (slot2) occupiedSlot = 2;
-      else if (slot3) occupiedSlot = 3;
-      else if (slot4) occupiedSlot = 4;
-      
-      Serial.println("[REJECT] Vehicle without number plate detected in slot " + String(occupiedSlot) + " - PARKING DENIED");
-      displayRejectionMessage(occupiedSlot);
+  if (lastPlate != "" && (slot1 || slot2 || slot3 || slot4)) {
+    int occupiedSlot = 0;
+    if (slot1) occupiedSlot = 1;
+    else if (slot2) occupiedSlot = 2;
+    else if (slot3) occupiedSlot = 3;
+    else if (slot4) occupiedSlot = 4;
+    
+    if (occupiedSlot > 0) {
+      Serial.println("✅ Car detected in slot " + String(occupiedSlot));
+      lastMessage = "Success: " + lastPlate + " parked in Slot " + String(occupiedSlot);
+      messageIsError = false;
+      updateSlotStatus(lastPlate, occupiedSlot);
+      lastPlate = "";
     }
   } else if (lastPlate != "") {
-    Serial.println("[WAIT] Plate set but no car detected in any slot yet");
+    lastMessage = "Waiting: " + lastPlate + " - Please park in available slot";
+    messageIsError = false;
+    Serial.println("⚠️ Plate set but no car detected in any slot yet");
   }
 }
 
@@ -246,26 +231,6 @@ void checkParkingSlots() {
   lastSlotCheck = millis();
   
   checkParkingSlotsImmediate();
-}
-
-void displayRejectionMessage(int slot) {
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.setTextSize(1);
-  display.println("PARKING DENIED");
-  display.println("==============");
-  display.println("");
-  display.println("No Number Plate");
-  display.println("Detected!");
-  display.println("");
-  display.println("Please show your");
-  display.println("number plate to");
-  display.println("the camera first");
-  display.display();
-  
-  // Auto clear after 5 seconds
-  delay(5000);
-  updateMainDisplay();
 }
 
 void updateSlotStatus(String plate, int slot) {
@@ -279,8 +244,34 @@ void updateSlotStatus(String plate, int slot) {
   
   int httpCode = http.POST(payload);
   if (httpCode > 0) {
-    Serial.println("[UPDATE] Slot updated: " + plate + " in slot " + String(slot));
+    Serial.println("🅿️ Slot updated: " + plate + " in slot " + String(slot));
+    gateStatus = "Gate Closed";
+  } else {
+    lastMessage = "Error: Failed to update slot status";
+    messageIsError = true;
   }
   
   http.end();
+}
+
+void handleAPIStatus() {
+  bool slot1 = !digitalRead(SLOT1_IR_PIN);
+  bool slot2 = !digitalRead(SLOT2_IR_PIN);
+  bool slot3 = !digitalRead(SLOT3_IR_PIN);
+  bool slot4 = !digitalRead(SLOT4_IR_PIN);
+  
+  String json = "{";
+  json += "\"gateStatus\":\"" + gateStatus + "\",";
+  json += "\"lastMessage\":\"" + lastMessage + "\",";
+  json += "\"messageIsError\":" + String(messageIsError ? "true" : "false") + ",";
+  json += "\"slots\":{";
+  json += "\"slot1\":" + String(slot1 ? "true" : "false") + ",";
+  json += "\"slot2\":" + String(slot2 ? "true" : "false") + ",";
+  json += "\"slot3\":" + String(slot3 ? "true" : "false") + ",";
+  json += "\"slot4\":" + String(slot4 ? "true" : "false");
+  json += "},";
+  json += "\"uptime\":" + String(millis()/1000);
+  json += "}";
+  
+  server.send(200, "application/json", json);
 }

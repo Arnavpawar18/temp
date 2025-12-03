@@ -39,9 +39,13 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH); // LED off initially
   
-  // Initialize servo
-  gateServo.attach(SERVO_PIN);
-  gateServo.write(0); // Closed position
+  // Initialize servo with proper settings
+  gateServo.attach(SERVO_PIN, 500, 2500); // Min/Max pulse width for better compatibility
+  delay(100);
+  gateServo.write(90); // Start at middle position
+  delay(1000);
+  gateServo.write(0); // Move to closed position
+  delay(500);
   
   // Connect to WiFi with retry logic
   connectToWiFi();
@@ -50,6 +54,7 @@ void setup() {
   server.on("/status", handleStatus);
   server.on("/gate", handleGate);
   server.on("/health", handleHealth);
+  server.on("/test", handleServoTest);
   server.begin();
   
   Serial.println("ESP8266 Gate Controller Ready");
@@ -157,6 +162,7 @@ void checkIRSensors() {
     entryIRState = true;
     Serial.println("ENTRY IR TRIGGERED");
     triggerCam("entry");
+    openGate(); // Open gate when entry sensor triggered
     lastTrigger = millis();
   } else if (digitalRead(ENTRY_IR_PIN)) {
     entryIRState = false;
@@ -167,6 +173,7 @@ void checkIRSensors() {
     exitIRState = true;
     Serial.println("EXIT IR TRIGGERED");
     triggerCam("exit");
+    openGate(); // Open gate when exit sensor triggered
     lastTrigger = millis();
   } else if (digitalRead(EXIT_IR_PIN)) {
     exitIRState = false;
@@ -241,16 +248,26 @@ void handleGate() {
 }
 
 void openGate() {
-  gateServo.write(90); // Open position
+  Serial.println("Opening gate...");
+  // Gradual movement to prevent servo strain
+  for (int pos = 0; pos <= 90; pos += 5) {
+    gateServo.write(pos);
+    delay(50);
+  }
   gateOpen = true;
   gateOpenTime = millis();
   gateStatus = "Gate Opening - Plate Detected";
   Serial.println("GATE OPENED");
-  blinkLED(1); // Single blink for gate open
+  blinkLED(1);
 }
 
 void closeGate() {
-  gateServo.write(0); // Closed position
+  Serial.println("Closing gate...");
+  // Gradual movement to prevent servo strain
+  for (int pos = 90; pos >= 0; pos -= 5) {
+    gateServo.write(pos);
+    delay(50);
+  }
   gateOpen = false;
   gateStatus = "Gate Closed";
   Serial.println("GATE CLOSED");
@@ -262,6 +279,24 @@ void sendHeartbeat() {
   // Optional: Send heartbeat to main server
   // This can help the main server know the ESP8266 is alive
   Serial.println("Heartbeat - System OK");
+}
+
+void handleServoTest() {
+  Serial.println("Testing servo movement...");
+  server.send(200, "text/plain", "Testing servo - check serial monitor");
+  
+  // Test servo movement
+  gateServo.write(0);
+  delay(1000);
+  gateServo.write(45);
+  delay(1000);
+  gateServo.write(90);
+  delay(1000);
+  gateServo.write(45);
+  delay(1000);
+  gateServo.write(0);
+  
+  Serial.println("Servo test completed");
 }
 
 void blinkLED(int times) {
