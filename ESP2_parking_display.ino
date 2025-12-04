@@ -11,7 +11,7 @@ const char* password = "0000011111";
 const char* serverIP = "10.137.170.161";    // Your laptop IP
 
 // Pin definitions for ESP32 (boot-safe pins)
-#define SLOT1_IR_PIN    32  // GPIO32
+#define SLOT1_IR_PIN    32  //  GPIO32
 #define SLOT2_IR_PIN    33  // GPIO33
 #define SLOT3_IR_PIN    25  // GPIO25
 #define SLOT4_IR_PIN    26  // GPIO26
@@ -195,6 +195,8 @@ void handleDisplayBill() {
   
   server.send(200, "text/plain", "Bill displayed");
 }
+
+
 
 void checkParkingSlotsImmediate() {
   bool slot1 = !digitalRead(SLOT1_IR_PIN);
