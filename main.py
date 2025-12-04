@@ -14,10 +14,10 @@ from pymongo import MongoClient
 from urllib.parse import quote_plus
 
 # Configuration
-API_KEY = 'AIzaSyA8ALCaIzgn17UTWdgGmqNgqojpyaZJDUA'
-ESP32_CAM_IP = '10.109.142.100'     # ESP32-CAM static IP
-ESP8266_ENTRY_IP = '10.109.142.101' # ESP1 ESP8266 static IP
-ESP8266_DISPLAY_IP = '10.137.170.70' # ESP2 ZY-ESP32 static IP
+API_KEY = ''
+ESP32_CAM_IP = '10.80.93.224'     # ESP32-CAM static IP
+ESP8266_ENTRY_IP = '10.80.93.52' # ESP1 ESP8266 static IP
+ESP8266_DISPLAY_IP = '10.80.93.52' # ESP2 ZY-ESP32 static IP
 MAX_RETRIES = 5
 PER_MINUTE_RATE = 10  # ₹10 per minute
 MINIMUM_CHARGE = 10   # ₹10 minimum

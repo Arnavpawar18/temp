@@ -4,7 +4,7 @@
 
 const char* ssid = "parking";
 const char* password = "0000011111";
-const char* esp32camIP = "10.137.170.68";  // ESP32-CAM IP
+const char* esp32camIP = "10.109.142.100";  // ESP32-CAM IP
 
 #define ENTRY_IR_PIN D1
 #define EXIT_IR_PIN D2
