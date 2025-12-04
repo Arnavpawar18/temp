@@ -8,7 +8,7 @@ const char* ssid = "parking";
 const char* password = "0000011111";
 
 // Server IP (will be updated with actual laptop IP)
-const char* serverIP = "10.137.170.161";    // Your laptop IP
+const char* serverIP = "10.109.142.101";    // Your laptop IP
 
 // Pin definitions for ESP32 (boot-safe pins)
 #define SLOT1_IR_PIN    32  //  GPIO32
@@ -235,6 +235,10 @@ void checkParkingSlots() {
   checkParkingSlotsImmediate();
 }
 
+void handleAPIStatus() {
+  server.send(200, "application/json", "{\"status\":\"ok\",\"ip\":\"" + WiFi.localIP().toString() + "\"}");
+}
+
 void updateSlotStatus(String plate, int slot) {
   HTTPClient http;
   
@@ -248,6 +252,17 @@ void updateSlotStatus(String plate, int slot) {
   if (httpCode > 0) {
     Serial.println("🅿️ Slot updated: " + plate + " in slot " + String(slot));
     gateStatus = "Gate Closed";
+  }
+  
+  http.end();
+}
+  if (httpCode > 0) {
+    Serial.println("🅿️ Slot updated: " + plate + " in slot " + String(slot));
+    gateStatus = "Gate Closed";
+  }
+  
+  http.end();
+}
   } else {
     lastMessage = "Error: Failed to update slot status";
     messageIsError = true;
